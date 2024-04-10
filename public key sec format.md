@@ -223,3 +223,78 @@ The running result for the above code is:
 ![截屏2024-04-10 14 50 56](https://github.com/wycl16514/golang-bitcoin-network-encoding/assets/7506958/ff5c0038-da85-470f-b495-4693fb40c3f6)
 
 
+Given SEC format string, let's see how we can decode it into the point on bitcoin curve, in util.go we add the following:
+```g
+func ParseSEC(secBin []byte) *Point {
+	//check first byte to determine its sec uncompress or compressed format
+	if secBin[0] == 4 {
+		//uncompress
+		x := new(big.Int)
+		x.SetBytes(secBin[1:33])
+		y := new(big.Int)
+		y.SetBytes(secBin[33:65])
+		return S256Point(x, y)
+	}
+
+	isEven := (secBin[0] == 2)
+	x := new(big.Int)
+	x.SetBytes(secBin[1:])
+	y2 := S256Field(x).Power(big.NewInt(int64(3))).Add(S256Field(big.NewInt(int64(7))))
+	y := y2.Sqrt()
+	var modOp big.Int
+	var yEven *FieldElement
+	var yOdd *FieldElement
+	if modOp.Mod(y.num, big.NewInt(int64(2))).Cmp(big.NewInt(int64(0))) == 0 {
+		yEven = y
+		yOdd = y.Negate()
+	} else {
+		yOdd = y
+		yEven = y.Negate()
+	}
+
+	if isEven {
+		return S256Point(x, yEven.num)
+	} else {
+		return S256Point(x, yOdd.num)
+	}
+}
+
+```
+We will use the function above to decode a compressed and uncompressed sec format:
+```g
+package main
+
+import (
+	ecc "elliptic_curve"
+	"fmt"
+	"math/big"
+)
+
+func main() {
+//0xdeadbeef54321 * G
+	p := new(big.Int)
+	p.SetString("deadbeef54321", 16)
+	privateKey := ecc.NewPrivateKey(p)
+	pubKey := privateKey.GetPublicKey()
+	fmt.Printf("pub key is %s\n", pubKey)
+	secBinUnCompressed := new(big.Int)
+	secBinUnCompressed.SetString(pubKey.Sec(false), 16)
+	unCompressDecode := ecc.ParseSEC(secBinUnCompressed.Bytes())
+	fmt.Printf("decode sec uncompressed format: %s\n", unCompressDecode)
+
+	secBinCompressed := new(big.Int)
+	secBinCompressed.SetString(pubKey.Sec(true), 16)
+	compressedDecode := ecc.ParseSEC(secBinCompressed.Bytes())
+	fmt.Printf("decode sec compressed format: %s\n", compressedDecode)
+}
+```
+The running result for the above code is :
+```g
+pub key is (x: FieldElement{order: 115792089237316195423570985008687907853269984665640564039457584007908834671663, num: 68183256789471564274367801875006375475112961631504146173182369992753849792144}, y: FieldElement{order: 115792089237316195423570985008687907853269984665640564039457584007908834671663, num: 22766467020259989524460707859208087846960031342427706382509198566352122699446}, a: FieldElement{order: 115792089237316195423570985008687907853269984665640564039457584007908834671663, num: 0}, b: FieldElement{order: 115792089237316195423570985008687907853269984665640564039457584007908834671663, num: 7})
+
+decode sec uncompressed format: (x: FieldElement{order: 115792089237316195423570985008687907853269984665640564039457584007908834671663, num: 68183256789471564274367801875006375475112961631504146173182369992753849792144}, y: FieldElement{order: 115792089237316195423570985008687907853269984665640564039457584007908834671663, num: 22766467020259989524460707859208087846960031342427706382509198566352122699446}, a: FieldElement{order: 115792089237316195423570985008687907853269984665640564039457584007908834671663, num: 0}, b: FieldElement{order: 115792089237316195423570985008687907853269984665640564039457584007908834671663, num: 7})
+
+decode sec compressed format: (x: FieldElement{order: 115792089237316195423570985008687907853269984665640564039457584007908834671663, num: 68183256789471564274367801875006375475112961631504146173182369992753849792144}, y: FieldElement{order: 115792089237316195423570985008687907853269984665640564039457584007908834671663, num: 22766467020259989524460707859208087846960031342427706382509198566352122699446}, a: FieldElement{order: 115792089237316195423570985008687907853269984665640564039457584007908834671663, num: 0}, b: FieldElement{order: 115792089237316195423570985008687907853269984665640564039457584007908834671663, num: 7})
+```
+
+we can check that the decode point for compressed and uncompressed SEC data is the same as the public key we generate before.

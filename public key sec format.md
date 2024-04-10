@@ -56,7 +56,7 @@ func (p *Point) Sec() string {
 		2. x in big endian hex string
 		3. y in big endian hex string
 	*/
-	return fmt.Sprintf("04%x%x", p.x, p.y)
+	return fmt.Sprintf("04%x%x", p.x.num, p.y.num)
 }
 ```
 Let's create some point and check the code above, in the Point struct we add the following method:

@@ -107,6 +107,7 @@ Because p is prime then p is also odd. If y is even, then p-y is odd, if y is od
 indicator for y is even or odd, by doing this we can avoid appending y in the data, that is to say we "compress" the y coordinate, following is te step used to generate the SEC compressed format:
 
 1, if y is even, set the starting byte to 0x02, otherwise set the starting byte to 0x03
+
 2, append x coordinate in 32 bytes as big endian hex string
 
 Let's check an example:

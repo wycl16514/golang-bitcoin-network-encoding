@@ -84,7 +84,7 @@ into an operation called hash160
 
 3, combine the first byte from step 1 and bytes from step 2
 
-4, do a hash256 on the result of step 3 and get the first 4 bytes from the result, this is called base58 checksum.
+4, do a hash256 on the result of step 3 and get the first 4 bytes from the result, append these 4 bytes to the result of step 3, this is called base58 checksum.
 
 5, combine bytes array from step 3 and step 4 together and encode it by using base58
 

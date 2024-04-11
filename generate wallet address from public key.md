@@ -38,6 +38,9 @@ func EncodeBase58(s []byte) string {
 		num = divOp.Div(num, big.NewInt(int64(58)))
 		result = string(BASE58_ALPHABET[mod.Int64()]) + result
 	}
+
+      return prefix + result
+}
 ```
 Let's test the code above:
 ```go

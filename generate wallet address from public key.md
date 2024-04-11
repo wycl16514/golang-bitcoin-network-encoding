@@ -78,10 +78,14 @@ The SEC format we mentioned before has flaws:
 In order to remove flaws above, we will use new encoding scheme when we want to generate bitcoin wallet address:
 
 1, if the address is for mainnet, set first byte to 0x00, for testnet set first byte to 0x6f
+
 2, encode the public key in SEC format(compressed or uncompressed), do sha256 and then follow ripemd160 hash, we can combine these two hash
 into an operation called hash160
+
 3, combine the first byte from step 1 and bytes from step 2
+
 4, do a hash256 on the result of step 3 and get the first 4 bytes from the result, this is called base58 checksum.
+
 5, combine bytes array from step 3 and step 4 together and encode it by using base58
 
 Let's use code to implement steps above, first we do the base58 checksum and hash160 first in util.go:

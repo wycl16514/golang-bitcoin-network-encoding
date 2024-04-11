@@ -70,3 +70,134 @@ base58 encoding is 9MA8fRQrT4u8Zj8ZRd6MAiiyaxb2Y1CMpvVkHQu5hVM6
 base58 encoding is 4fE3H2E6XMp4SsxtwinF7w9a34ooUrwWe4WsW1458Pd
 base58 encoding is EQJsjkd6JaGwxrjEhfeqPenqHwrBmPQZjJGNSCHBkcF7
 ```
+
+The SEC format we mentioned before has flaws:
+1. it still too long to be memorize or recognize by human
+2. has pitfalls on security
+
+In order to remove flaws above, we will use new encoding scheme when we want to generate bitcoin wallet address:
+
+1, if the address is for mainnet, set first byte to 0x00, for testnet set first byte to 0x6f
+2, encode the public key in SEC format(compressed or uncompressed), do sha256 and then follow ripemd160 hash, we can combine these two hash
+into an operation called hash160
+3, combine the first byte from step 1 and bytes from step 2
+4, do a hash256 on the result of step 3 and get the first 4 bytes from the result, this is called base58 checksum.
+5, combine bytes array from step 3 and step 4 together and encode it by using base58
+
+Let's use code to implement steps above, first we do the base58 checksum and hash160 first in util.go:
+```g
+import (
+	"crypto/sha256"
+	"math/big"
+
+	"golang.org/x/crypto/ripemd160"
+)
+
+...
+
+func Base58Checksum(s []byte) []byte {
+	//do hash256 on s and append the first 4 bytes of the result to s
+	hash256 := Hash256(string(s))
+	return append(s, hash256[:4]...)
+}
+
+func Hash160(s []byte) []byte {
+	//do hash256 and do ripemd160 following
+	hash256 := Hash256(string(s))
+	hasher := ripemd160.New()
+	hasher.Write(hash256)
+	hashBytes := hasher.Sum(nil)
+	return hashBytes
+}
+```
+
+Now let's generate the wallet address by using above methods, in point.go add the following code:
+```g
+func (p *Point) Sec(compressed bool) (string, []byte) {
+	secBytes := []byte{}
+	if !compressed {
+		/*
+			uncompressed sec:
+			1. first byte 04
+			2. x in big endian hex string
+			3. y in big endian hex string
+			padding x,y with leading 0
+		*/
+		secBytes = append(secBytes, 0x04)
+		secBytes = append(secBytes, p.x.num.Bytes()...)
+		secBytes = append(secBytes, p.y.num.Bytes()...)
+		return fmt.Sprintf("04%064x%064x", p.x.num, p.y.num), secBytes
+	}
+
+	var opMod big.Int
+	if opMod.Mod(p.y.num, big.NewInt(int64(2))).Cmp(big.NewInt(int64(0))) == 0 {
+		//y is even, set first byte t0 0x02
+		secBytes = append(secBytes, 0x02)
+		secBytes = append(secBytes, p.x.num.Bytes()...)
+		return fmt.Sprintf("02%064x", p.x.num), secBytes
+	} else {
+		secBytes = append(secBytes, 0x03)
+		secBytes = append(secBytes, p.x.num.Bytes()...)
+		return fmt.Sprintf("03%064x", p.x.num), secBytes
+	}
+}
+
+
+func (p *Point) hash160(compressed bool) []byte {
+	_, secBytes := p.Sec(compressed)
+	return Hash160(secBytes)
+}
+
+func (p *Point) Address(compressed bool, testnet bool) string {
+	hash160 := p.hash160(compressed)
+	//if mainnet set first byte to 0x00 , 0x6f for testnet
+	prefix := []byte{}
+	if testnet {
+		prefix = append(prefix, 0x6f)
+	} else {
+		prefix = append(prefix, 0x00)
+	}
+	//do base58 checksum
+	return Base58Checksum(append(prefix, hash160...))
+}
+```
+
+Let's test the above code:
+```g
+package main
+
+import (
+	ecc "elliptic_curve"
+	"fmt"
+	"math/big"
+)
+
+func main() {
+        privateKey := ecc.NewPrivateKey(big.NewInt(int64(5002)))
+	pubKey := privateKey.GetPublicKey()
+	fmt.Printf("wallet address for 5002*G is %s\n", pubKey.Address(false, true))
+
+	//2020 ^ 5*G
+	var expOp big.Int
+	privateKey = ecc.NewPrivateKey(expOp.Exp(big.NewInt(int64(2020)), big.NewInt(int64(5)), nil))
+	pubKey = privateKey.GetPublicKey()
+	fmt.Printf("wallet address for 2020^5 * G is %s\n", pubKey.Address(true, true))
+
+	//0x12345deadbeef * G
+	p := new(big.Int)
+	p.SetString("12345deadbeef", 16)
+	privateKey = ecc.NewPrivateKey(p)
+	pubKey = privateKey.GetPublicKey()
+	fmt.Printf("wallet address for 0x12345deadbeef*G is %s\n", pubKey.Address(true, false))
+}
+
+```
+
+The running result of the above code is :
+```g
+wallet address for 5002*G is mmTPbXQFxboEtNRkwfh6K51jvdtHLxGeMA
+wallet address for 2020^5 * G is mopVkxp8UhXqRYbCYJsbeE1h1fiF64jcoH
+wallet address for 0x12345deadbeef*G is 1F1Pn2y6pDb68E5nYJJeba4TLg2U7B6KF1
+```
+
+

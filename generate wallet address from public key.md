@@ -284,7 +284,118 @@ WIF for private key 5003 is cMahea7zqjxrtgAbB7LSGbcQUr1uX1ojuat9jZodMN8rFTv2sfUK
 WIF for private key 2021^5  is 91avARGdfge8E4tZfYLoxeJ5sGBdNJQH4kvjpWAxgzczjbCwxic
 WIF for private key deadbeef54321 is KwDiBf89QgGbjEhKnhXJuH7LrciVrZi3qYjgtNr6kJz3AAYY7Thi
 ```
-Those are encodings for given private keys
+Those are encodings for given private keys.
+
+Finally we need to handle the trouble of big endian and little endian for data in bitcoin. These two data format are used interchangely in bitcoin, and 
+there is not clear rule for when big endian is using or little endian is using:
+
+![image](https://github.com/wycl16514/golang-bitcoin-network-encoding/assets/7506958/7a76931f-411e-420d-9339-ae1a7462bbed)
+
+for number 0x12345678, if the most significant byte placed from lower address, then its big endian, but if the order is reverse, the most significant byte
+placed from higher address, such as the number in memory is saved as 0x78, 0x56, 0x34, 0x12, then its little endian, by default golang is using big endian
+on my mac, run the following code and check the result:
+```g
+        p := new(big.Int)
+	p.SetString("12345678", 16)
+	bytes := p.Bytes()
+	fmt.Printf("bytes for 1 in hex %064x\n", bytes)
+```
+The result is like following:
+```g
+bytes for 0x12345678 in hex 0000000000000000000000000000000000000000000000000000000012345678
+```
+you can see the most significant byte 0x12 is at the lower address, but most of time data sending on the network are using little endian encoding, and we
+need helper function to transfer big endian to little endian. Let's code two help functions in util.go like following:
+```g
+package elliptic_curve
+
+import (
+	"crypto/sha256"
+	"math/big"
+
+	"golang.org/x/crypto/ripemd160"
+
+	"github.com/tsuna/endian"
+)
+
+...
+
+type LITTLE_ENDIAN_LENGTH int
+
+const (
+	LITTLE_ENDIAN_2_BYTES LITTLE_ENDIAN_LENGTH = iota
+	LITTLE_ENDIAN_4_BYTES
+	LITTLE_ENDIAN_8_BYTES
+)
+
+func BigIntToLittleEndian(v *big.Int, length LITTLE_ENDIAN_LENGTH) []byte {
+	switch length {
+	case LITTLE_ENDIAN_2_BYTES:
+		val := v.Int64()
+		littleEdianVal := endian.HostToNetUint16(uint16(val))
+		p := big.NewInt(int64(littleEdianVal))
+		return p.Bytes()
+	case LITTLE_ENDIAN_4_BYTES:
+		val := v.Int64()
+		littleEdianVal := endian.HostToNetUint32(uint32(val))
+		p := big.NewInt(int64(littleEdianVal))
+		return p.Bytes()
+	case LITTLE_ENDIAN_8_BYTES:
+		val := v.Int64()
+		littleEdianVal := endian.HostToNetUint64(uint64(val))
+		p := big.NewInt(int64(littleEdianVal))
+		return p.Bytes()
+	}
+
+	return nil
+}
+
+func LittleEndianToBigInt(bytes []byte, length LITTLE_ENDIAN_LENGTH) *big.Int {
+	switch length {
+	case LITTLE_ENDIAN_2_BYTES:
+		p := new(big.Int)
+		p.SetBytes(bytes)
+		val := endian.NetToHostUint16(uint16(p.Uint64()))
+		return big.NewInt(int64(val))
+	case LITTLE_ENDIAN_4_BYTES:
+		p := new(big.Int)
+		p.SetBytes(bytes)
+		val := endian.NetToHostUint32(uint32(p.Uint64()))
+		return big.NewInt(int64(val))
+	case LITTLE_ENDIAN_8_BYTES:
+		p := new(big.Int)
+		p.SetBytes(bytes)
+		val := endian.NetToHostUint64(uint64(p.Uint64()))
+		return big.NewInt(int64(val))
+	}
+
+	return nil
+}
+```
+
+Let's test the code above in main.go:
+```g
+func main() {
+        p := new(big.Int)
+	p.SetString("12345678", 16)
+	bytes := p.Bytes()
+	fmt.Printf("bytes for 0x12345678 in hex %x\n", bytes)
+
+	littleEndianByte := ecc.BigIntToLittleEndian(p, ecc.LITTLE_ENDIAN_4_BYTES)
+	fmt.Printf("little endian for int: %x\n", littleEndianByte)
+
+	littleEndianByteToInt64 := ecc.LittleEndianToBigInt(littleEndianByte, ecc.LITTLE_ENDIAN_4_BYTES)
+	fmt.Printf("little endian byte to int: %x\n", littleEndianByteToInt64)
+}
+```
+The running result of the above code is:
+```g
+bytes for 0x12345678 in hex 12345678
+little endian for int: 78563412
+little endian byte to int: 12345678
+```
+we can see the value 0x12345678 is orginally in big endian, then we can use BigIntToLittleEndian to transfer it into little endian, than we use 
+ LittleEndianToBigInt to make it back to big endian again.
 
 
 

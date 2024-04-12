@@ -289,7 +289,8 @@ Those are encodings for given private keys.
 Finally we need to handle the trouble of big endian and little endian for data in bitcoin. These two data format are used interchangely in bitcoin, and 
 there is not clear rule for when big endian is using or little endian is using:
 
-![image](https://github.com/wycl16514/golang-bitcoin-network-encoding/assets/7506958/7a76931f-411e-420d-9339-ae1a7462bbed)
+![image](https://github.com/wycl16514/golang-bitcoin-network-encoding/assets/7506958/ddf563f4-b15a-4dd4-88ca-a828b62c69a0)
+
 
 for number 0x12345678, if the most significant byte placed from lower address, then its big endian, but if the order is reverse, the most significant byte
 placed from higher address, such as the number in memory is saved as 0x78, 0x56, 0x34, 0x12, then its little endian, by default golang is using big endian
